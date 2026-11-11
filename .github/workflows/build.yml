@@ -17,12 +17,12 @@ jobs:
 
       - name: Estrai progetto dallo zip
         run: |
-          if [ -f IptvLite.zip ]; then
-            unzip -q -o IptvLite.zip
+          if [ -f Sguardone.zip ]; then
+            unzip -q -o Sguardone.zip
           fi
-          if [ -d IptvLite ]; then
-            cp -r IptvLite/. .
-            rm -rf IptvLite
+          if [ -d Sguardone ]; then
+            cp -r Sguardone/. .
+            rm -rf Sguardone
           fi
           echo "Contenuto progetto:"
           ls -la
