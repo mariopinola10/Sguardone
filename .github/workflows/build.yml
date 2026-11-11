@@ -17,14 +17,18 @@ jobs:
 
       - name: Estrai progetto dallo zip
         run: |
-          if [ -f Sguardone.zip ]; then
-            unzip -q -o Sguardone.zip
+          # Prende il primo .zip presente, qualunque sia il nome
+          ZIP=$(ls -1 *.zip 2>/dev/null | head -n 1 || true)
+          if [ -n "$ZIP" ]; then
+            echo "Estraggo: $ZIP"
+            unzip -q -o "$ZIP" -d _src
+            ROOT=$(dirname "$(find _src -name settings.gradle.kts | head -n 1)")
+            if [ -z "$ROOT" ] || [ "$ROOT" = "." ]; then
+              echo "settings.gradle.kts non trovato nello zip"; exit 1
+            fi
+            cp -r "$ROOT"/. .
+            rm -rf _src
           fi
-          if [ -d Sguardone ]; then
-            cp -r Sguardone/. .
-            rm -rf Sguardone
-          fi
-          echo "Contenuto progetto:"
           ls -la
           test -f settings.gradle.kts || { echo "settings.gradle.kts mancante"; exit 1; }
           test -f app/build.gradle.kts || { echo "app/build.gradle.kts mancante"; exit 1; }
@@ -43,12 +47,12 @@ jobs:
       - name: Compila APK
         run: |
           gradle assembleRelease --no-daemon --stacktrace
-          cp app/build/outputs/apk/release/app-release.apk IptvLite.apk
+          cp app/build/outputs/apk/release/app-release.apk Sguardone.apk
 
       - name: Pubblica release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
-          name: IPTV Lite build ${{ github.run_number }}
-          files: IptvLite.apk
+          name: Sguardone build ${{ github.run_number }}
+          files: Sguardone.apk
           make_latest: true
