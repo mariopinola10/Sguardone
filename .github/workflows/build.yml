@@ -7,6 +7,12 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -29,7 +35,6 @@ jobs:
             cp -r "$ROOT"/. .
             rm -rf _src
           fi
-          ls -la
           test -f settings.gradle.kts || { echo "settings.gradle.kts mancante"; exit 1; }
           test -f app/build.gradle.kts || { echo "app/build.gradle.kts mancante"; exit 1; }
 
@@ -56,3 +61,33 @@ jobs:
           name: Sguardone build ${{ github.run_number }}
           files: Sguardone.apk
           make_latest: true
+
+      - name: Prepara sito con l'APK
+        run: |
+          mkdir -p site
+          cp Sguardone.apk site/Sguardone.apk
+          VERSION=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts || echo "?")
+          cat > site/index.html <<EOF
+          <!doctype html><html lang="it"><head><meta charset="utf-8">
+          <meta name="viewport" content="width=device-width,initial-scale=1"><title>Sguardone</title></head>
+          <body style="font-family:sans-serif;background:#0b1d3f;color:#fff;text-align:center;padding:40px">
+          <h1>Sguardone</h1><p>Versione $VERSION · build ${{ github.run_number }}</p>
+          <p><a style="color:#8ccbff;font-size:22px" href="Sguardone.apk">Scarica Sguardone.apk</a></p>
+          </body></html>
+          EOF
+
+      - name: Carica sito
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Pubblica su GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
