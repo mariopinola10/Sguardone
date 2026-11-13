@@ -20,14 +20,34 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0   # serve la cronologia per sapere quando è stato caricato ogni zip
 
-      - name: Estrai progetto dallo zip
+      - name: Estrai progetto dallo zip più recente
         run: |
-          # Prende il primo .zip presente, qualunque sia il nome
-          ZIP=$(ls -1 *.zip 2>/dev/null | head -n 1 || true)
-          if [ -n "$ZIP" ]; then
-            echo "Estraggo: $ZIP"
-            unzip -q -o "$ZIP" -d _src
+          # 1) Se ci sono zip con la versione nel nome (es. "Sguardone-0.21.0.zip") prende la versione più alta.
+          # 2) Altrimenti: lo zip con il versionCode più alto all'interno; a parità, quello caricato per ultimo.
+          # I vecchi zip possono restare nel repository e si cancellano quando vuoi.
+          shopt -s nullglob
+          BEST=$(ls -1 *.zip 2>/dev/null | grep -E '^Sguardone-[0-9]+(\.[0-9]+)*\.zip$' | sort -V | tail -n 1 || true)
+          if [ -n "$BEST" ]; then
+            echo "Zip con versione nel nome:"; ls -1 *.zip | grep -E '^Sguardone-[0-9]' | sort -V | sed 's/^/  /'
+          else
+            BEST_VC=-1; BEST_T=-1
+            for Z in *.zip; do
+              VC=$(unzip -p "$Z" '*app/build.gradle.kts' 2>/dev/null | grep -oP 'versionCode\s*=\s*\K[0-9]+' | head -n 1)
+              VC=${VC:-0}
+              T=$(git log -1 --format=%ct -- "$Z" 2>/dev/null)
+              T=${T:-0}
+              echo "  $Z  -> versionCode $VC, caricato $(date -d @$T '+%F %T' 2>/dev/null)"
+              if [ "$VC" -gt "$BEST_VC" ] || { [ "$VC" -eq "$BEST_VC" ] && [ "$T" -gt "$BEST_T" ]; }; then
+                BEST="$Z"; BEST_VC=$VC; BEST_T=$T
+              fi
+            done
+          fi
+          if [ -n "$BEST" ]; then
+            echo "Compilo: $BEST"
+            unzip -q -o "$BEST" -d _src
             ROOT=$(dirname "$(find _src -name settings.gradle.kts | head -n 1)")
             if [ -z "$ROOT" ] || [ "$ROOT" = "." ]; then
               echo "settings.gradle.kts non trovato nello zip"; exit 1
@@ -35,7 +55,6 @@ jobs:
             cp -r "$ROOT"/. .
             rm -rf _src
           fi
-          ls -la
           test -f settings.gradle.kts || { echo "settings.gradle.kts mancante"; exit 1; }
           test -f app/build.gradle.kts || { echo "app/build.gradle.kts mancante"; exit 1; }
 
