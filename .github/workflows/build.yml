@@ -35,6 +35,7 @@ jobs:
             cp -r "$ROOT"/. .
             rm -rf _src
           fi
+          ls -la
           test -f settings.gradle.kts || { echo "settings.gradle.kts mancante"; exit 1; }
           test -f app/build.gradle.kts || { echo "app/build.gradle.kts mancante"; exit 1; }
 
@@ -54,29 +55,41 @@ jobs:
           gradle assembleRelease --no-daemon --stacktrace
           cp app/build/outputs/apk/release/app-release.apk Sguardone.apk
 
+      # version.json: lo legge il pulsante "Aggiorna" dell'app (versione + impronta SHA-256 dell'APK)
+      - name: Crea version.json
+        run: |
+          VC=$(grep -oP 'versionCode\s*=\s*\K[0-9]+' app/build.gradle.kts | head -n 1)
+          VN=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts | head -n 1)
+          SHA=$(sha256sum Sguardone.apk | cut -d' ' -f1)
+          APK="https://github.com/${{ github.repository }}/releases/download/build-${{ github.run_number }}/Sguardone.apk"
+          printf '{"versionCode":%s,"versionName":"%s","sha256":"%s","apk":"%s"}\n' "$VC" "$VN" "$SHA" "$APK" > version.json
+          cat version.json
+
       - name: Pubblica release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
-          name: Sguardone build ${{ github.run_number }}
-          files: Sguardone.apk
+          name: Sguardone ${{ github.run_number }}
+          files: |
+            Sguardone.apk
+            version.json
           make_latest: true
 
-      - name: Prepara sito con l'APK
+      - name: Prepara pagina download
         run: |
           mkdir -p site
-          cp Sguardone.apk site/Sguardone.apk
-          VERSION=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts || echo "?")
+          cp Sguardone.apk version.json site/
+          VN=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts | head -n 1)
           cat > site/index.html <<EOF
           <!doctype html><html lang="it"><head><meta charset="utf-8">
           <meta name="viewport" content="width=device-width,initial-scale=1"><title>Sguardone</title></head>
-          <body style="font-family:sans-serif;background:#0b1d3f;color:#fff;text-align:center;padding:40px">
-          <h1>Sguardone</h1><p>Versione $VERSION · build ${{ github.run_number }}</p>
-          <p><a style="color:#8ccbff;font-size:22px" href="Sguardone.apk">Scarica Sguardone.apk</a></p>
+          <body style="font-family:sans-serif;background:#0f1318;color:#fff;padding:24px">
+          <h1>Sguardone $VN</h1>
+          <p><a style="color:#7fa7ff;font-size:20px" href="Sguardone.apk">Scarica Sguardone.apk</a></p>
           </body></html>
           EOF
 
-      - name: Carica sito
+      - name: Carica pagina
         uses: actions/upload-pages-artifact@v3
         with:
           path: site
